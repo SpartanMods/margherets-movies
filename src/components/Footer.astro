@@ -1,0 +1,38 @@
+---
+import { url } from '../lib/url.js';
+const year = new Date().getFullYear();
+---
+<footer class="site-footer">
+  <div class="container">
+    <div class="site-footer__inner">
+      <div>
+        <a class="brand" href={url('')}>
+          <span class="brand__sign bulbs" aria-hidden="true"><span>M</span></span>
+          <span class="brand__name">Margheret's Movies<small>A palace for reviews</small></span>
+        </a>
+        <p style="margin-top:18px">Honest, long-form takes on the movies worth arguing about. Every film gets a score out of 100 and a reason for every point.</p>
+      </div>
+      <div>
+        <h3>The Palace</h3>
+        <ul>
+          <li><a href={url('')}>Now Showing</a></li>
+          <li><a href={url('reviews/')}>All reviews</a></li>
+          <li><a href={url('hall-of-fame/')}>Hall of Fame</a></li>
+          <li><a href={url('search/')}>Search</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>The Fine Print</h3>
+        <ul>
+          <li><a href={url('about/')}>About the palace</a></li>
+          <li><a href={url('about/#how-we-score')}>How the scores work</a></li>
+          <li><a href={url('about/#tiers')}>The tiers</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="site-footer__base">
+      <span>© {year} Margheret's Movies. Opinions are our own and proudly so.</span>
+      <span class="tmdb-credit"><b>TMDB</b> This site uses the TMDB API but is not endorsed or certified by TMDB.</span>
+    </div>
+  </div>
+</footer>

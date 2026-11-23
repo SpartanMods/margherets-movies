@@ -1,0 +1,30 @@
+---
+import Poster from './Poster.astro';
+import TierBadge from './TierBadge.astro';
+import { reviewUrl } from '../lib/url.js';
+import { tierFor } from '../lib/tiers.js';
+const { review } = Astro.props;
+const tier = tierFor(review.score);
+---
+<a
+  class="card reveal"
+  href={reviewUrl(review.slug)}
+  data-card
+  data-score={review.score ?? 0}
+  data-date={review.date.valueOf()}
+  data-title={review.title}
+  data-tier={tier?.slug ?? ''}
+  data-genres={review.genres.join('|')}
+  data-decade={review.decade ?? ''}
+>
+  <Poster title={review.title} year={review.year} poster={review.poster}>
+    {review.score != null && (
+      <span class="card__stub" aria-label={`Score ${review.score}`}>{review.score}<small>ADMIT</small></span>
+    )}
+  </Poster>
+  <div>
+    <h3 class="card__title">{review.title}</h3>
+    <p class="card__meta">{[review.year, review.genres[0], review.runtime ? `${Math.floor(review.runtime / 60)}h ${review.runtime % 60}m` : null].filter(Boolean).join(' · ')}</p>
+  </div>
+  <TierBadge score={review.score} />
+</a>

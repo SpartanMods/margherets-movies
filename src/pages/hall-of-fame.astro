@@ -1,0 +1,86 @@
+---
+import Base from '../layouts/Base.astro';
+import Poster from '../components/Poster.astro';
+import ScoreMarquee from '../components/ScoreMarquee.astro';
+import TierBadge from '../components/TierBadge.astro';
+import { loadReviews } from '../lib/load.js';
+import { stepForPct } from '../lib/tiers.js';
+import { RUBRIC, rubricFor } from '../lib/rubric.js';
+import { url, reviewUrl } from '../lib/url.js';
+
+const reviews = loadReviews().filter((r) => r.score != null);
+const ranked = [...reviews].sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+
+// Best film in each rubric category (by share of available points, then total score).
+const leaders = RUBRIC.map((cat) => {
+  const scored = reviews
+    .map((r) => ({ r, c: r.categories.find((c) => rubricFor(c.name)?.name === cat.name) }))
+    .filter((x) => x.c)
+    .sort((a, b) => b.c.pct - a.c.pct || b.r.score - a.r.score);
+  return { cat, top: scored.slice(0, 3) };
+}).filter((l) => l.top.length);
+---
+<Base title="The Hall of Fame" description="Every film ranked by score, plus the category leaders: best story, execution, performances, impact and rewatchability.">
+  <header class="page-head">
+    <p class="eyebrow">Top of the bill</p>
+    <h1>The Hall of Fame</h1>
+    <p>Every film that has played the palace, ranked by score. Plus the films that own each category.</p>
+  </header>
+
+  <section class="section container" style="padding-top:48px">
+    {ranked.length === 0 ? (
+      <div class="empty-state"><h3>The hall is empty</h3><p>Rankings appear as soon as the first scored review is published.</p></div>
+    ) : (
+      <ol class="hall-list" style="padding:0">
+        {ranked.map((r, i) => (
+          <li style="list-style:none" class="reveal">
+            <a class="hall-row" href={reviewUrl(r.slug)}>
+              <span class="hall-row__rank" aria-label={`Rank ${i + 1}`}>{i + 1}</span>
+              <Poster title={r.title} year={r.year} poster={r.poster} sizes="70px" />
+              <span>
+                <span class="hall-row__title">{r.title}</span>
+                <span class="hall-row__meta">
+                  <span>{[r.year, r.genres[0]].filter(Boolean).join(' · ')}</span>
+                  <TierBadge score={r.score} />
+                </span>
+                {r.categories.length > 0 && (
+                  <span class="mini-bars" role="img" aria-label={r.categories.map((c) => `${c.name} ${c.score} of ${c.max}`).join(', ')}>
+                    {r.categories.map((c) => <i data-step={stepForPct(c.pct)} style={`--w:${c.max};--pct:${c.pct}`} title={`${c.name}: ${c.score}/${c.max}`}></i>)}
+                  </span>
+                )}
+              </span>
+              <ScoreMarquee score={r.score} size="sm" />
+            </a>
+          </li>
+        ))}
+      </ol>
+    )}
+  </section>
+
+  {leaders.length > 0 && (
+    <section class="section container" style="padding-top:0">
+      <div class="section-head">
+        <div><p class="eyebrow">Category leaders</p><h2>Best in show</h2><p>The highest share of points in each part of the scorecard.</p></div>
+        <a class="section-link" href={url('about/#how-we-score')}>How categories work</a>
+      </div>
+      <div class="leaders">
+        {leaders.map(({ cat, top }) => (
+          <div class="leader reveal">
+            <p class="leader__cat">{cat.name}</p>
+            {top.map(({ r, c }, i) => (
+              <div style={i ? 'margin-top:16px;padding-top:14px;border-top:1px dashed var(--line)' : ''}>
+                <a class="leader__title" href={reviewUrl(r.slug)} style={i ? 'font-size:1rem;margin-top:0' : ''}>{i === 0 ? '' : `${i + 1}. `}{r.title}</a>
+                <p class="leader__score">{c.score} / {c.max}</p>
+                {i === 0 && (
+                  <span class="bar__track" data-step={stepForPct(c.pct)} style="display:block" role="meter" aria-valuemin="0" aria-valuemax={c.max} aria-valuenow={c.score} aria-label={`${r.title}, ${cat.name}`}>
+                    <span class="bar__fill" style={`--pct:${c.pct}`}></span>
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  )}
+</Base>

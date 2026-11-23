@@ -1,0 +1,90 @@
+---
+import Base from '../layouts/Base.astro';
+import { TIERS } from '../lib/tiers.js';
+import { RUBRIC } from '../lib/rubric.js';
+import { url } from '../lib/url.js';
+
+const total = RUBRIC.reduce((a, c) => a + c.points, 0);
+const ranges = TIERS.map((t, i) => ({ ...t, max: i === 0 ? 100 : TIERS[i - 1].min - 1 }));
+---
+<Base title="About + How we score" description="What Margheret's Movies is, and exactly how every film gets its score out of 100.">
+  <header class="page-head">
+    <p class="eyebrow">Behind the curtain</p>
+    <h1>About the Palace</h1>
+    <p>Long, honest reviews of movies worth thinking about, and a scorecard that shows exactly where every point went.</p>
+  </header>
+
+  <section class="section container" style="padding-top:56px">
+    <div class="about-grid">
+      <div class="prose" style="max-width:none">
+        <p>Margheret's Movies is a palace for reviews. No plot recaps with a star rating stapled on the end. Real write-ups of real reactions, built to be read on the couch while the credits are still rolling.</p>
+        <h2 id="what-you-get">What you get here</h2>
+        <p>Every review lands its verdict early, then earns it. The things that work get named, and so do the things that don't, with the scene where it happens. If a movie changed how we see something, we'll say so. If it dragged, we'll say where.</p>
+        <p>Endings get talked about too, but only behind the velvet curtain. Nothing gets spoiled unless you raise it yourself.</p>
+        <h2 id="what-gets-reviewed">What gets reviewed</h2>
+        <p>Anything worth an argument. New releases, old favorites, the ones everybody saw and the ones nobody did. Check the <a href={url('')}>Coming Attractions</a> on the front page to see what's up next.</p>
+      </div>
+      <div>
+        <div class="letterboard bulbs" style="--bulb-ring:12px;--bulb-gap:20px">
+          <div class="letterboard__inner" style="text-align:center">
+            <p class="eyebrow" style="color:#e6b84f">House rules</p>
+            <ul style="list-style:none;padding:0;margin:18px 0 0;display:grid;gap:14px;font-family:var(--font-display);font-size:1.15rem;color:#f4ebdd">
+              <li>Every opinion is our own.</li>
+              <li>Every claim points to a scene.</li>
+              <li>Every score shows its math.</li>
+              <li>Spoilers stay behind the curtain.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section container" id="how-we-score" style="padding-top:0">
+    <div class="deco-rule" style="margin-bottom:56px"><span></span></div>
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">How we score</p>
+        <h2>Five categories, {total} points</h2>
+        <p>Every film is scored on the same five questions. Impact carries the most weight, because the best movies are the ones you're still thinking about the next day.</p>
+      </div>
+    </div>
+
+    <div class="weight-bar" role="img" aria-label={RUBRIC.map((c) => `${c.name} ${c.points} points`).join(', ')}>
+      {RUBRIC.map((c) => <i style={`--w:${c.points};--c:${c.color}`} title={`${c.name}: ${c.points}`}></i>)}
+    </div>
+    <div class="weight-key">
+      {RUBRIC.map((c) => <span><i style={`--c:${c.color}`}></i>{c.name} · {c.points}</span>)}
+    </div>
+
+    <div class="rubric-list" style="margin-top:36px">
+      {RUBRIC.map((c) => (
+        <div class="rubric-item reveal">
+          <div class="rubric-item__pts">{c.points}<small>POINTS</small></div>
+          <div><h3>{c.name}</h3><p>{c.text}</p></div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="section container" id="tiers" style="padding-top:0">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">The tiers</p>
+        <h2>From Standing Ovation to Walk Out</h2>
+        <p>Each score falls into a tier, so you can tell at a glance whether to buy the ticket. The same colors light the category bars on every scorecard.</p>
+      </div>
+    </div>
+    <ol class="tier-table">
+      {ranges.map((t) => (
+        <li data-step={t.step} class="reveal">
+          <span class="tier-table__range">{t.min}–{t.max}</span>
+          <div>
+            <a class="tier-table__name" href={`${url('reviews/')}?tier=${t.slug}`} style="color:var(--ink);text-decoration:none">{t.name}</a>
+            <p>{t.blurb}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  </section>
+</Base>

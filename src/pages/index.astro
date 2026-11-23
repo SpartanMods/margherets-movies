@@ -1,0 +1,133 @@
+---
+import Base from '../layouts/Base.astro';
+import Poster from '../components/Poster.astro';
+import ScoreMarquee from '../components/ScoreMarquee.astro';
+import TierBadge from '../components/TierBadge.astro';
+import ReviewCard from '../components/ReviewCard.astro';
+import { loadReviews, loadComingAttractions } from '../lib/load.js';
+import { tierFor } from '../lib/tiers.js';
+import { RUBRIC } from '../lib/rubric.js';
+import { url, reviewUrl } from '../lib/url.js';
+
+const reviews = loadReviews();
+const coming = loadComingAttractions(reviews);
+const [feature, ...rest] = reviews;
+const ranked = [...reviews].filter((r) => r.score != null).sort((a, b) => b.score - a.score).slice(0, 5);
+const runtime = (m) => (m ? `${Math.floor(m / 60)}h ${m % 60}m` : null);
+
+const tickerItems = [
+  ...reviews.slice(0, 6).map((r) => `Now showing: ${r.title} · ${r.score ?? ''} · ${tierFor(r.score)?.name ?? ''}`),
+  ...coming.map((c) => `Coming soon: ${c.title}`),
+];
+---
+<Base>
+  {feature ? (
+    <section class="marquee-hero" aria-labelledby="feature-title">
+      {feature.backdrop
+        ? <div class="marquee-hero__bg" style={`background-image:url('${url(feature.backdrop)}')`} aria-hidden="true"></div>
+        : <div class="marquee-hero__bg marquee-hero__bg--velvet" aria-hidden="true"></div>}
+      <div class="container marquee-hero__inner">
+        <div>
+          <div class="now-showing bulbs"><span>Now Showing</span></div>
+          <h1 id="feature-title">{feature.title}</h1>
+          {feature.headline && <p class="headline">{feature.headline}</p>}
+          <p class="excerpt">{feature.excerpt}</p>
+          <div class="hero-meta">
+            <ScoreMarquee score={feature.score} size="sm" />
+            <TierBadge score={feature.score} />
+            <span class="chip">{[feature.year, feature.genres[0], runtime(feature.runtime)].filter(Boolean).join(' · ')}</span>
+          </div>
+          <div class="hero-actions">
+            <a class="btn btn--gold" href={reviewUrl(feature.slug)}>Read the review <span aria-hidden="true">→</span></a>
+            <a class="btn btn--ghost" href={url('reviews/')}>Browse all reviews</a>
+          </div>
+        </div>
+        <a class="marquee-hero__poster" href={reviewUrl(feature.slug)} aria-label={`Read the ${feature.title} review`}>
+          <Poster title={feature.title} year={feature.year} poster={feature.poster} eager sizes="340px" />
+        </a>
+      </div>
+    </section>
+  ) : (
+    <section class="page-head"><p class="eyebrow">Opening soon</p><h1>Margheret's Movies</h1><p>The first review is on its way. Grab a seat.</p></section>
+  )}
+
+  {tickerItems.length > 0 && (
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker__track">
+        {[0, 1].map(() => tickerItems.map((t) => <span class="ticker__item">{t}</span>))}
+      </div>
+    </div>
+  )}
+
+  {rest.length > 0 && (
+    <section class="section container">
+      <div class="section-head">
+        <div><p class="eyebrow">Also playing</p><h2>Latest reviews</h2></div>
+        <a class="section-link" href={url('reviews/')}>All reviews</a>
+      </div>
+      <div class="card-grid">{rest.slice(0, 8).map((r) => <ReviewCard review={r} />)}</div>
+    </section>
+  )}
+
+  {coming.length > 0 && (
+    <section class="section container coming" aria-labelledby="coming-title">
+      <div class="letterboard bulbs reveal">
+        <div class="letterboard__inner">
+          <h2 class="letterboard__title" id="coming-title">Coming Attractions</h2>
+          <p class="letterboard__sub">Next up on the screen. Reviews in the works.</p>
+          <ul class="coming-grid" role="list" style="list-style:none;padding:0">
+            {coming.map((c) => (
+              <li class="coming-item">
+                <Poster title={c.title} year={c.year} poster={c.poster} sizes="160px"><span class="soon">Coming soon</span></Poster>
+                <p class="coming-item__title">{c.title}</p>
+                {c.year && <p class="coming-item__year">{c.year}</p>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  )}
+
+  {ranked.length >= 3 && (
+    <section class="section container">
+      <div class="section-head">
+        <div><p class="eyebrow">Top of the bill</p><h2>The Hall of Fame</h2></div>
+        <a class="section-link" href={url('hall-of-fame/')}>Full rankings</a>
+      </div>
+      <ol class="hall-list">
+        {ranked.map((r, i) => (
+          <li style="list-style:none">
+            <a class="hall-row" href={reviewUrl(r.slug)}>
+              <span class="hall-row__rank">{i + 1}</span>
+              <Poster title={r.title} year={r.year} poster={r.poster} sizes="70px" />
+              <span><span class="hall-row__title">{r.title}</span><span class="hall-row__meta">{r.year} <TierBadge score={r.score} /></span></span>
+              <ScoreMarquee score={r.score} size="sm" />
+            </a>
+          </li>
+        ))}
+      </ol>
+    </section>
+  )}
+
+  <section class="section container" aria-labelledby="score-title">
+    <div class="section-head">
+      <div>
+        <p class="eyebrow">How the scores work</p>
+        <h2 id="score-title">100 points, five questions</h2>
+        <p>Every review ends with a scorecard. Impact counts the most, because the best movies follow you home.</p>
+      </div>
+      <a class="section-link" href={url('about/#how-we-score')}>The full rubric</a>
+    </div>
+    <div class="rubric-strip">
+      {RUBRIC.map((c) => (
+        <div class={`rubric-cell reveal${c.points === 30 ? ' rubric-cell--big' : ''}`}>
+          <div class="rubric-cell__pts">{c.points}<small> pts</small></div>
+          <div class="rubric-cell__name">{c.name}</div>
+          <p>{c.text}</p>
+          <span class="rubric-cell__meter" style={`width:${(c.points / 30) * 100}%`} aria-hidden="true"></span>
+        </div>
+      ))}
+    </div>
+  </section>
+</Base>

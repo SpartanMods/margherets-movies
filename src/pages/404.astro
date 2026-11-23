@@ -1,0 +1,15 @@
+---
+import Base from '../layouts/Base.astro';
+import { url } from '../lib/url.js';
+---
+<Base title="Screening not found">
+  <section class="page-head" style="min-height:60vh;display:grid;place-content:center">
+    <p class="eyebrow">Error 404</p>
+    <h1>Wrong Theater</h1>
+    <p>This screening isn't on tonight's bill. It may have moved, or it never played here at all.</p>
+    <div class="hero-actions" style="justify-content:center">
+      <a class="btn btn--gold" href={url('')}>Back to Now Showing</a>
+      <a class="btn btn--ghost" href={url('search/')}>Search reviews</a>
+    </div>
+  </section>
+</Base>

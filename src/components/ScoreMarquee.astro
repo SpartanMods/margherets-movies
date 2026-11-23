@@ -1,0 +1,9 @@
+---
+const { score, size = 'lg' } = Astro.props;
+---
+{score != null && (
+  <div class={`score-marquee bulbs${size === 'sm' ? ' score-marquee--sm' : ''}`} role="img" aria-label={`Score: ${score} out of 100`}>
+    <span class="score-marquee__num" aria-hidden="true">{score}</span>
+    <span class="score-marquee__of" aria-hidden="true">OUT OF 100</span>
+  </div>
+)}

@@ -1,0 +1,91 @@
+---
+import Base from '../layouts/Base.astro';
+import { loadReviews } from '../lib/load.js';
+import { tierFor } from '../lib/tiers.js';
+import { url, reviewUrl } from '../lib/url.js';
+
+const index = loadReviews().map((r) => ({
+  t: r.title,
+  y: r.year,
+  h: r.headline ?? '',
+  e: r.excerpt,
+  s: r.score,
+  tier: tierFor(r.score)?.name ?? '',
+  step: tierFor(r.score)?.step ?? 1,
+  u: reviewUrl(r.slug),
+  p: r.poster ? url(r.poster) : null,
+  k: [r.credits.director?.join(' '), r.credits.cast?.join(' '), r.credits.writing, r.tags.join(' '), r.genres.join(' ')].filter(Boolean).join(' '),
+}));
+---
+<Base title="Search" description="Search every review by title, cast, director, genre or tag.">
+  <header class="page-head" style="padding-bottom:70px">
+    <p class="eyebrow">Find a screening</p>
+    <h1>Search</h1>
+    <p>Titles, cast, directors, genres, tags. Start typing.</p>
+  </header>
+  <section class="container" style="padding-bottom:80px">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <label class="visually-hidden" for="q">Search reviews</label>
+      <input id="q" type="search" placeholder="Try “Helen Hunt” or “drama”" autocomplete="off" data-q />
+    </div>
+    <p class="search-hint" data-hint aria-live="polite">{index.length} {index.length === 1 ? 'review' : 'reviews'} in the palace</p>
+    <ul class="results" data-results style="margin-top:24px"></ul>
+  </section>
+
+  <script type="application/json" id="search-index" set:html={JSON.stringify(index)} />
+  <script>
+    const data = JSON.parse(document.getElementById('search-index').textContent);
+    const input = document.querySelector('[data-q]');
+    const list = document.querySelector('[data-results]');
+    const hint = document.querySelector('[data-hint]');
+    const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const norm = (s) => String(s).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const mark = (text, terms) => {
+      let out = esc(text);
+      for (const t of terms) if (t.length > 1) out = out.replace(new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<mark>$1</mark>');
+      return out;
+    };
+    const variant = (title) => { let h = 0; for (const ch of title) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h % 4; };
+
+    function thumb(r) {
+      if (r.p) return `<div class="poster"><img src="${esc(r.p)}" alt="" loading="lazy"></div>`;
+      return `<div class="poster"><div class="titlecard" data-variant="${variant(r.t)}" style="padding:8%"><span class="titlecard__title" style="font-size:.6rem">${esc(r.t)}</span></div></div>`;
+    }
+
+    function run() {
+      const q = input.value.trim();
+      const terms = norm(q).split(/\s+/).filter(Boolean);
+      const hits = data
+        .map((r) => {
+          const title = norm(r.t), hay = norm(`${r.t} ${r.y ?? ''} ${r.h} ${r.e} ${r.k} ${r.tier}`);
+          if (!terms.every((t) => hay.includes(t))) return null;
+          const score = terms.reduce((a, t) => a + (title.includes(t) ? 10 : 0) + (norm(r.k).includes(t) ? 3 : 0) + 1, 0);
+          return { r, score };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.score - a.score || (b.r.s ?? 0) - (a.r.s ?? 0));
+
+      list.innerHTML = hits.map(({ r }) => `
+        <li><a class="result" href="${esc(r.u)}">
+          ${thumb(r)}
+          <span>
+            <span class="result__title">${mark(r.t, terms)}${r.y ? ` <span style="color:var(--muted);font-size:.9em">(${r.y})</span>` : ''}</span>
+            <span class="result__snip">${mark(r.h ? `${r.h}. ${r.e}` : r.e, terms)}</span>
+          </span>
+          <span class="tier" data-step="${r.step}">${r.s ?? ''} · ${esc(r.tier)}</span>
+        </a></li>`).join('');
+      hint.textContent = q
+        ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'} for “${q}”`
+        : `${data.length} ${data.length === 1 ? 'review' : 'reviews'} in the palace`;
+      const u = new URL(location.href);
+      if (q) u.searchParams.set('q', q); else u.searchParams.delete('q');
+      history.replaceState(null, '', u);
+    }
+
+    input.value = new URLSearchParams(location.search).get('q') || '';
+    input.addEventListener('input', run);
+    run();
+    if (!input.value) input.focus();
+  </script>
+</Base>
