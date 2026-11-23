@@ -1,0 +1,212 @@
+---
+import Base from '../../layouts/Base.astro';
+import Poster from '../../components/Poster.astro';
+import ScoreMarquee from '../../components/ScoreMarquee.astro';
+import TierBadge from '../../components/TierBadge.astro';
+import Scorecard from '../../components/Scorecard.astro';
+import ReviewCard from '../../components/ReviewCard.astro';
+import { loadReviews } from '../../lib/load.js';
+import { SCORECARD_TOKEN, PULLQUOTE_TOKEN } from '../../lib/parse-review.js';
+import { url, reviewUrl } from '../../lib/url.js';
+
+export function getStaticPaths() {
+  const reviews = loadReviews();
+  return reviews.map((review, i) => ({
+    params: { slug: review.slug },
+    props: { review, newer: reviews[i - 1] ?? null, older: reviews[i + 1] ?? null, others: reviews.filter((r) => r.slug !== review.slug).slice(0, 4) },
+  }));
+}
+
+const { review, newer, older, others } = Astro.props;
+const r = review;
+
+// Split the rendered body around the scorecard and pull-quote tokens.
+const parts = [];
+for (const chunk of r.html.split(SCORECARD_TOKEN).flatMap((c, i, arr) => (i < arr.length - 1 ? [c, SCORECARD_TOKEN] : [c]))) {
+  if (chunk === SCORECARD_TOKEN) { parts.push({ type: 'scorecard' }); continue; }
+  chunk.split(PULLQUOTE_TOKEN).forEach((c, i, arr) => {
+    parts.push({ type: 'html', html: c });
+    if (i < arr.length - 1) parts.push({ type: 'pullquote' });
+  });
+}
+const hasScorecardSpot = parts.some((p) => p.type === 'scorecard');
+
+const fmtDate = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+const runtime = r.runtime ? `${Math.floor(r.runtime / 60)}h ${r.runtime % 60}m` : null;
+const pageUrl = new URL(reviewUrl(r.slug), Astro.site).toString();
+const shareText = `${r.title}${r.year ? ` (${r.year})` : ''}: ${r.score}/100 on Margheret's Movies`;
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Review',
+  name: r.fullHeadline,
+  headline: r.fullHeadline,
+  description: r.metaDescription,
+  url: pageUrl,
+  datePublished: r.date.toISOString(),
+  author: { '@type': 'Organization', name: "Margheret's Movies", url: new URL(url(''), Astro.site).toString() },
+  publisher: { '@type': 'Organization', name: "Margheret's Movies" },
+  itemReviewed: {
+    '@type': 'Movie',
+    name: r.title,
+    ...(r.year ? { dateCreated: String(r.year) } : {}),
+    ...(r.credits.director?.length ? { director: r.credits.director.map((n) => ({ '@type': 'Person', name: n })) } : {}),
+    ...(r.credits.cast?.length ? { actor: r.credits.cast.slice(0, 6).map((n) => ({ '@type': 'Person', name: n })) } : {}),
+    ...(r.poster ? { image: new URL(url(r.poster), Astro.site).toString() } : {}),
+  },
+  ...(r.score != null ? { reviewRating: { '@type': 'Rating', ratingValue: r.score, bestRating: 100, worstRating: 0 } } : {}),
+};
+---
+<Base title={`${r.title}${r.year ? ` (${r.year})` : ''} Review: ${r.headline ?? ''}`.replace(/: $/, '')} description={r.metaDescription} image={`og/${r.slug}.png`} type="article" jsonLd={jsonLd}>
+  <article>
+    <header class="review-hero">
+      {r.backdrop
+        ? <div class="review-hero__bg" style={`background-image:url('${url(r.backdrop)}')`} aria-hidden="true"></div>
+        : <div class="marquee-hero__bg marquee-hero__bg--velvet" aria-hidden="true"></div>}
+      <div class="container review-hero__inner">
+        <div class="review-hero__poster"><Poster title={r.title} year={r.year} poster={r.poster} eager /></div>
+        <div>
+          <nav class="crumbs" aria-label="Breadcrumb"><a href={url('')}>Now Showing</a> / <a href={url('reviews/')}>Reviews</a></nav>
+          <p class="eyebrow">Review</p>
+          <h1 style="margin-top:10px">{r.title}</h1>
+          {r.headline && <p class="headline">{r.headline}</p>}
+          <div class="facts">
+            {r.year && <span class="chip">{r.year}</span>}
+            {r.genres.map((g) => <span class="chip">{g}</span>)}
+            {runtime && <span class="chip">{runtime}</span>}
+            {r.credits.rated && <span class="chip">Rated {r.credits.rated}</span>}
+            {r.credits.director?.[0] && <span class="chip">Dir. {r.credits.director.join(', ')}</span>}
+          </div>
+        </div>
+        <div class="review-hero__score">
+          <ScoreMarquee score={r.score} />
+          <TierBadge score={r.score} />
+        </div>
+      </div>
+    </header>
+
+    <div class="dek-band">
+      <div class="container dek-band__inner">
+        <p>{r.excerpt}</p>
+        <div class="byline">
+          <span>By <strong>Margheret's Movies</strong></span>
+          <span><time datetime={r.date.toISOString()}>{fmtDate(r.date)}</time></span>
+          <span>{r.readMinutes} min read</span>
+          {r.hasSpoilers && <span>Spoilers behind the curtain</span>}
+        </div>
+      </div>
+    </div>
+
+    <div class="container review-layout">
+      <div>
+        <div class="prose">
+          {parts.map((p) =>
+            p.type === 'html' ? <Fragment set:html={p.html} /> :
+            p.type === 'scorecard' ? <Scorecard review={r} /> :
+            <figure class="pullquote"><p>{r.pullQuote}</p><cite>{r.title}</cite></figure>
+          )}
+          {!hasScorecardSpot && <Scorecard review={r} />}
+        </div>
+
+        {r.tags.length > 0 && (
+          <div class="tags" aria-label="Tags">
+            {r.tags.map((t) => <a class="chip" href={`${url('search/')}?q=${encodeURIComponent(t)}`}>#{t}</a>)}
+          </div>
+        )}
+
+        <div class="share" data-share data-url={pageUrl} data-text={shareText}>
+          <span>Share</span>
+          <button class="chip" type="button" data-copy>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            <em style="font-style:normal" data-copy-label>Copy link</em>
+          </button>
+          <button class="chip" type="button" data-native hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v14"/></svg>
+            Share
+          </button>
+          <a class="chip" target="_blank" rel="noopener" href={`https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(pageUrl)}`}>X</a>
+          <a class="chip" target="_blank" rel="noopener" href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}`}>Facebook</a>
+          <a class="chip" target="_blank" rel="noopener" href={`https://www.reddit.com/submit?url=${encodeURIComponent(pageUrl)}&title=${encodeURIComponent(shareText)}`}>Reddit</a>
+        </div>
+      </div>
+
+      <aside class="review-aside">
+        <div class="ticket">
+          <div class="ticket__head">
+            <span class="ticket__admit">ADMIT ONE</span>
+            <span class="ticket__no">No. {String(r.score ?? 0).padStart(3, '0')}</span>
+          </div>
+          <dl>
+            {r.credits.director?.length > 0 && <div><dt>Directed by</dt><dd>{r.credits.director.join(', ')}</dd></div>}
+            {r.credits.writing && <div><dt>Written by</dt><dd>{r.credits.writing}</dd></div>}
+            {r.credits.cast?.length > 0 && <div><dt>Starring</dt><dd>{r.credits.cast.join(', ')}</dd></div>}
+            {(runtime || r.credits.rated) && <div><dt>Runtime · Rating</dt><dd>{[runtime, r.credits.rated && `Rated ${r.credits.rated}`].filter(Boolean).join(' · ')}</dd></div>}
+            {r.credits.whereToWatch && <div><dt>Where to watch</dt><dd>{r.credits.whereToWatch.charAt(0).toUpperCase() + r.credits.whereToWatch.slice(1)}.{r.credits.whereToWatchNote && <small>{r.credits.whereToWatchNote}</small>}</dd></div>}
+            {!r.credits.director?.length && r.creditsText && <div><dt>Credits</dt><dd>{r.creditsText}</dd></div>}
+          </dl>
+        </div>
+
+        {r.headings.length > 2 && (
+          <nav class="toc" aria-label="In this review">
+            <h2>In this review</h2>
+            <ol>
+              {r.headings.map((h) => <li><a href={`#${h.id}`} data-toc-link>{h.text}</a></li>)}
+            </ol>
+          </nav>
+        )}
+      </aside>
+    </div>
+  </article>
+
+  {(newer || older) && (
+    <div class="container" style="padding-bottom:40px">
+      <nav class="pager" aria-label="More reviews">
+        {newer ? <a href={reviewUrl(newer.slug)}><small>← Newer review</small><strong>{newer.title}</strong></a> : <span></span>}
+        {older ? <a href={reviewUrl(older.slug)}><small>Older review →</small><strong>{older.title}</strong></a> : <span></span>}
+      </nav>
+    </div>
+  )}
+
+  {others.length > 0 && (
+    <section class="section container" style="padding-top:20px">
+      <div class="section-head"><div><p class="eyebrow">Also playing</p><h2>More from the palace</h2></div><a class="section-link" href={url('reviews/')}>All reviews</a></div>
+      <div class="card-grid">{others.map((o) => <ReviewCard review={o} />)}</div>
+    </section>
+  )}
+
+  <script>
+    // Share buttons
+    const share = document.querySelector('[data-share]');
+    if (share) {
+      const link = share.getAttribute('data-url');
+      const text = share.getAttribute('data-text');
+      const copyBtn = share.querySelector('[data-copy]');
+      const label = share.querySelector('[data-copy-label]');
+      copyBtn?.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(link); if (label) label.textContent = 'Copied'; }
+        catch { if (label) label.textContent = 'Copy failed'; }
+        setTimeout(() => { if (label) label.textContent = 'Copy link'; }, 2000);
+      });
+      const nativeBtn = share.querySelector('[data-native]');
+      if (nativeBtn && navigator.share) {
+        nativeBtn.hidden = false;
+        nativeBtn.addEventListener('click', () => navigator.share({ title: text, url: link }).catch(() => {}));
+      }
+    }
+
+    // Highlight the current section in the table of contents
+    const links = [...document.querySelectorAll('[data-toc-link]')];
+    if (links.length) {
+      const map = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+      const obs = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            links.forEach((a) => a.classList.remove('is-active'));
+            map.get(e.target.id)?.classList.add('is-active');
+          }
+        }
+      }, { rootMargin: '-20% 0px -70% 0px' });
+      map.forEach((_, id) => { const el = document.getElementById(id); if (el) obs.observe(el); });
+    }
+  </script>
+</Base>

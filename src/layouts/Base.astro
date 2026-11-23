@@ -1,0 +1,114 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { url } from '../lib/url.js';
+
+const {
+  title,
+  description = "Honest, long-form movie reviews from a palace built for them. Every film scored out of 100 across story, execution, performances, impact and rewatchability.",
+  image = 'og/default.png',
+  type = 'website',
+  jsonLd = null,
+} = Astro.props;
+
+const SITE_NAME = "Margheret's Movies";
+const fullTitle = title ? `${title} · ${SITE_NAME}` : `${SITE_NAME} · A palace for movie reviews`;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const ogImage = new URL(url(image), Astro.site);
+---
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta name="theme-color" content="#0b0809" />
+    <link rel="icon" type="image/svg+xml" href={url('favicon.svg')} />
+
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:type" content={type} />
+    <meta property="og:title" content={title ?? SITE_NAME} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Limelight&family=Playfair+Display:ital,wght@0,400..900;1,400..700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400..600&display=swap"
+    />
+
+    <script is:inline>
+      (function () {
+        var d = document.documentElement;
+        d.classList.add('js');
+        try {
+          var t = localStorage.getItem('mm-theme');
+          if (t === 'light' || t === 'dark') d.setAttribute('data-theme', t);
+        } catch (e) {}
+      })();
+    </script>
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />}
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <Header />
+    <main id="main">
+      <slot />
+    </main>
+    <Footer />
+
+    <script>
+      // Theme toggle
+      const root = document.documentElement;
+      document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+          root.setAttribute('data-theme', next);
+          try { localStorage.setItem('mm-theme', next); } catch (e) {}
+          btn.setAttribute('aria-label', next === 'light' ? 'Switch to dark mode' : 'Switch to light mode');
+        });
+      });
+
+      // Mobile menu
+      const menuBtn = document.querySelector('[data-menu-toggle]');
+      const nav = document.querySelector('[data-nav]');
+      menuBtn?.addEventListener('click', () => {
+        const open = nav?.classList.toggle('is-open');
+        menuBtn.setAttribute('aria-expanded', String(!!open));
+      });
+
+      // Reveal on scroll + light the score bars when they come into view
+      const io = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          e.target.classList.add(e.target.matches('.bars') ? 'is-lit' : 'is-in');
+          io.unobserve(e.target);
+        }
+      }, { threshold: 0.15 });
+      document.querySelectorAll('.reveal, .bars').forEach((el) => io.observe(el));
+
+      // Velvet curtains
+      document.querySelectorAll('[data-curtain]').forEach((curtain) => {
+        const drape = curtain.querySelector('.curtain__drape');
+        drape?.addEventListener('click', () => {
+          curtain.classList.add('is-open');
+          drape.setAttribute('aria-expanded', 'true');
+          const stage = curtain.querySelector('.curtain__stage');
+          setTimeout(() => {
+            curtain.classList.add('is-done');
+            stage?.setAttribute('tabindex', '-1');
+            stage?.focus({ preventScroll: true });
+          }, 1200);
+        });
+      });
+    </script>
+  </body>
+</html>

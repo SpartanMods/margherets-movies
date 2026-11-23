@@ -1,0 +1,40 @@
+---
+// The marquee scorecard: big number, tier, and a color-graded bar per category.
+// Bar color comes from a sequential ramp (darker/dimmer = lower, brighter = higher),
+// using the same cut points as the tiers. Every bar also shows its number as text.
+import ScoreMarquee from './ScoreMarquee.astro';
+import TierBadge from './TierBadge.astro';
+import { stepForPct, tierFor, TIERS } from '../lib/tiers.js';
+
+const { review } = Astro.props;
+const tier = tierFor(review.score);
+---
+{review.categories.length > 0 && (
+  <aside class="scorecard" aria-label={`Scorecard: ${review.score} out of 100`}>
+    <div class="scorecard__head">
+      <ScoreMarquee score={review.score} />
+      <div>
+        <p class="eyebrow">The Scorecard</p>
+        <h3 class="scorecard__title">{review.title}{review.year ? ` (${review.year})` : ''}</h3>
+        <div style="margin-top:10px"><TierBadge score={review.score} /></div>
+        {tier && <p class="scorecard__sub">{tier.blurb}</p>}
+      </div>
+    </div>
+    <ul class="bars">
+      {review.categories.map((c) => (
+        <li class="bar" data-step={stepForPct(c.pct)} title={`${c.name}: ${c.score} out of ${c.max} (${Math.round(c.pct * 100)}%)`}>
+          <span class="bar__name">{c.name}<span class="bar__weight">Out of {c.max}</span></span>
+          <span class="bar__track" role="meter" aria-valuemin="0" aria-valuemax={c.max} aria-valuenow={c.score} aria-label={c.name}>
+            <span class="bar__fill" style={`--pct:${c.pct}`}></span>
+          </span>
+          <span class="bar__val">{c.score}<small>/{c.max}</small></span>
+        </li>
+      ))}
+    </ul>
+    <div class="scorecard__legend" aria-label="Bar color key">
+      {[...TIERS].reverse().map((t) => (
+        <span data-step={t.step}><i></i>{t.min === 0 ? '<40%' : `${t.min}%+`}</span>
+      ))}
+    </div>
+  </aside>
+)}

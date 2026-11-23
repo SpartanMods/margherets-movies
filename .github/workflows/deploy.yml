@@ -1,0 +1,42 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Add this in GitHub: Settings > Secrets and variables > Actions > New repository secret
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+    steps:
+      - name: Check out (full history, so review publish dates come from git)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install, fetch posters, build
+        uses: withastro/action@v3
+        with:
+          node-version: 22
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

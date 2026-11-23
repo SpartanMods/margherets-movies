@@ -1,0 +1,6 @@
+---
+import { tierFor } from '../lib/tiers.js';
+const { score, class: cls = '' } = Astro.props;
+const tier = tierFor(score);
+---
+{tier && <span class={`tier ${cls}`} data-step={tier.step}>{tier.name}</span>}

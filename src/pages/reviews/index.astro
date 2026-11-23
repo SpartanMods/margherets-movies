@@ -1,0 +1,95 @@
+---
+import Base from '../../layouts/Base.astro';
+import ReviewCard from '../../components/ReviewCard.astro';
+import { loadReviews } from '../../lib/load.js';
+import { TIERS, tierFor } from '../../lib/tiers.js';
+
+const reviews = loadReviews();
+const genres = [...new Set(reviews.flatMap((r) => r.genres))].sort();
+const decades = [...new Set(reviews.map((r) => r.decade).filter(Boolean))].sort().reverse();
+const tiersUsed = TIERS.filter((t) => reviews.some((r) => tierFor(r.score)?.slug === t.slug));
+---
+<Base title="All reviews" description="Every review in the palace. Filter by tier, genre and decade, or sort by score.">
+  <header class="page-head">
+    <p class="eyebrow">The Archive</p>
+    <h1>Every Review</h1>
+    <p>Every film that's played the palace. Filter by tier, genre or decade, or sort by score.</p>
+  </header>
+
+  <section class="section container" style="padding-top:40px">
+    <div class="filters" data-filters>
+      <div class="filters__row" role="group" aria-label="Filter by tier">
+        <span class="filters__label">Tier</span>
+        <button class="chip" type="button" data-tier-filter="" aria-pressed="true">All</button>
+        {tiersUsed.map((t) => <button class="chip" type="button" data-tier-filter={t.slug} data-step={t.step} aria-pressed="false">{t.name}</button>)}
+      </div>
+      <div class="filters__row">
+        <span class="filters__label">Refine</span>
+        <label class="visually-hidden" for="f-genre">Genre</label>
+        <select class="select" id="f-genre" data-genre>
+          <option value="">All genres</option>
+          {genres.map((g) => <option value={g}>{g}</option>)}
+        </select>
+        <label class="visually-hidden" for="f-decade">Decade</label>
+        <select class="select" id="f-decade" data-decade>
+          <option value="">All decades</option>
+          {decades.map((d) => <option value={d}>{d}</option>)}
+        </select>
+        <label class="visually-hidden" for="f-sort">Sort</label>
+        <select class="select" id="f-sort" data-sort>
+          <option value="date">Newest first</option>
+          <option value="score-desc">Highest score</option>
+          <option value="score-asc">Lowest score</option>
+          <option value="title">A to Z</option>
+        </select>
+        <span class="filters__count" data-count aria-live="polite">{reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}</span>
+      </div>
+    </div>
+
+    <div class="card-grid" data-grid>
+      {reviews.map((r) => <ReviewCard review={r} />)}
+    </div>
+    <div class="empty-state" data-empty hidden>
+      <h3>No screenings match</h3>
+      <p>Try a different tier, genre or decade.</p>
+    </div>
+  </section>
+
+  <script>
+    const grid = document.querySelector('[data-grid]');
+    const cards = [...document.querySelectorAll('[data-card]')];
+    const tierBtns = [...document.querySelectorAll('[data-tier-filter]')];
+    const genreSel = document.querySelector('[data-genre]');
+    const decadeSel = document.querySelector('[data-decade]');
+    const sortSel = document.querySelector('[data-sort]');
+    const count = document.querySelector('[data-count]');
+    const empty = document.querySelector('[data-empty]');
+    const params = new URLSearchParams(location.search);
+    let tier = params.get('tier') || '';
+
+    function apply() {
+      const g = genreSel.value, d = decadeSel.value, s = sortSel.value;
+      let shown = 0;
+      for (const c of cards) {
+        const ok = (!tier || c.dataset.tier === tier)
+          && (!g || c.dataset.genres.split('|').includes(g))
+          && (!d || c.dataset.decade === d);
+        c.hidden = !ok;
+        if (ok) { shown++; c.classList.add('is-in'); }
+      }
+      const sorted = [...cards].sort((a, b) => {
+        if (s === 'score-desc') return b.dataset.score - a.dataset.score;
+        if (s === 'score-asc') return a.dataset.score - b.dataset.score;
+        if (s === 'title') return a.dataset.title.localeCompare(b.dataset.title);
+        return b.dataset.date - a.dataset.date;
+      });
+      sorted.forEach((c) => grid.appendChild(c));
+      tierBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tierFilter === tier)));
+      count.textContent = `${shown} ${shown === 1 ? 'review' : 'reviews'}`;
+      empty.hidden = shown !== 0;
+    }
+    tierBtns.forEach((b) => b.addEventListener('click', () => { tier = b.dataset.tierFilter; apply(); }));
+    [genreSel, decadeSel, sortSel].forEach((el) => el.addEventListener('change', apply));
+    apply();
+  </script>
+</Base>

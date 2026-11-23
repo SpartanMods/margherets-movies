@@ -1,0 +1,20 @@
+---
+// Real poster when TMDB has one, otherwise a marquee-style title card.
+import { url } from '../lib/url.js';
+const { title, year = null, poster = null, eager = false, sizes = '(max-width: 760px) 45vw, 260px' } = Astro.props;
+let hash = 0;
+for (const ch of title) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+const variant = hash % 4;
+---
+<div class="poster">
+  {poster ? (
+    <img src={url(poster)} alt={`Poster for ${title}${year ? ` (${year})` : ''}`} loading={eager ? 'eager' : 'lazy'} decoding="async" width="600" height="900" sizes={sizes} />
+  ) : (
+    <div class="titlecard" data-variant={variant} role="img" aria-label={`${title}${year ? ` (${year})` : ''}`}>
+      <span class="titlecard__star" aria-hidden="true">✦ ✦ ✦</span>
+      <span class="titlecard__title" aria-hidden="true">{title}</span>
+      {year && <span class="titlecard__year" aria-hidden="true">{year}</span>}
+    </div>
+  )}
+  <slot />
+</div>
