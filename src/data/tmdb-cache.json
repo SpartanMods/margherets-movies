@@ -9,7 +9,12 @@
     "runtime": 122,
     "poster": "tmdb/pay-it-forward-2000-poster.webp",
     "backdrop": "tmdb/pay-it-forward-2000-backdrop.webp",
-    "fetchedAt": "2026-11-23"
+    "fetchedAt": "2026-11-23",
+    "stills": [
+      "tmdb/pay-it-forward-2000-still-3.webp",
+      "tmdb/pay-it-forward-2000-still-2.webp",
+      "tmdb/pay-it-forward-2000-still-1.webp"
+    ]
   },
   "godzilla-minus-zero": {
     "id": 1381071,
@@ -37,7 +42,12 @@
     "runtime": 125,
     "poster": "tmdb/godzilla-minus-one-2023-poster.webp",
     "backdrop": "tmdb/godzilla-minus-one-2023-backdrop.webp",
-    "fetchedAt": "2026-11-23"
+    "fetchedAt": "2026-11-23",
+    "stills": [
+      "tmdb/godzilla-minus-one-2023-still-2.webp",
+      "tmdb/godzilla-minus-one-2023-still-3.webp",
+      "tmdb/godzilla-minus-one-2023-still-1.webp"
+    ]
   },
   "tombstone-1993": {
     "id": 11969,

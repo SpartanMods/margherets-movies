@@ -6,7 +6,7 @@ import TierBadge from '../../components/TierBadge.astro';
 import Scorecard from '../../components/Scorecard.astro';
 import ReviewCard from '../../components/ReviewCard.astro';
 import { loadReviews } from '../../lib/load.js';
-import { SCORECARD_TOKEN, PULLQUOTE_TOKEN } from '../../lib/parse-review.js';
+import { SCORECARD_TOKEN, PULLQUOTE_TOKEN, STILL_TOKEN } from '../../lib/parse-review.js';
 import { url, reviewUrl } from '../../lib/url.js';
 
 export function getStaticPaths() {
@@ -20,14 +20,21 @@ export function getStaticPaths() {
 const { review, newer, older, others } = Astro.props;
 const r = review;
 
-// Split the rendered body around the scorecard and pull-quote tokens.
+// Split the rendered body around the scorecard, pull-quote and still tokens.
+const TOKENS = { [SCORECARD_TOKEN]: 'scorecard', [PULLQUOTE_TOKEN]: 'pullquote', [STILL_TOKEN]: 'still' };
+const tokenRe = new RegExp(`(${Object.keys(TOKENS).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`);
 const parts = [];
-for (const chunk of r.html.split(SCORECARD_TOKEN).flatMap((c, i, arr) => (i < arr.length - 1 ? [c, SCORECARD_TOKEN] : [c]))) {
-  if (chunk === SCORECARD_TOKEN) { parts.push({ type: 'scorecard' }); continue; }
-  chunk.split(PULLQUOTE_TOKEN).forEach((c, i, arr) => {
-    parts.push({ type: 'html', html: c });
-    if (i < arr.length - 1) parts.push({ type: 'pullquote' });
-  });
+let stillNo = 0;
+for (const piece of r.html.split(tokenRe)) {
+  const type = TOKENS[piece];
+  if (!type) { if (piece.trim()) parts.push({ type: 'html', html: piece }); continue; }
+  if (type === 'still') {
+    const src = r.stills[stillNo];
+    stillNo++;
+    if (src) parts.push({ type: 'still', src, n: stillNo });
+    continue;
+  }
+  parts.push({ type });
 }
 const hasScorecardSpot = parts.some((p) => p.type === 'scorecard');
 
@@ -103,6 +110,14 @@ const jsonLd = {
           {parts.map((p) =>
             p.type === 'html' ? <Fragment set:html={p.html} /> :
             p.type === 'scorecard' ? <Scorecard review={r} /> :
+            p.type === 'still' ? (
+              <figure class="still reveal">
+                <div class="still__frame">
+                  <img src={url(p.src)} alt={`Still from ${r.title}${r.year ? ` (${r.year})` : ''}`} loading="lazy" decoding="async" width="1400" height="788" />
+                </div>
+                <figcaption><span>{r.title}{r.year ? ` (${r.year})` : ''}</span><span>Frame {String(p.n).padStart(2, '0')} · Image via TMDB</span></figcaption>
+              </figure>
+            ) :
             <figure class="pullquote"><p>{r.pullQuote}</p><cite>{r.title}</cite></figure>
           )}
           {!hasScorecardSpot && <Scorecard review={r} />}

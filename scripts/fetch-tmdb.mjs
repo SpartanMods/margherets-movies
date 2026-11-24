@@ -114,5 +114,31 @@ for (const film of wanted) {
   }
 }
 
-if (added) writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2) + '\n');
+// Extra stills for reviewed films: wide, text-free frames placed between review sections.
+const STILL_COUNT = 4;
+let stillsAdded = 0;
+for (const r of loadReviews()) {
+  const key = movieKey(r.title, r.year);
+  const entry = cache[key];
+  if (!entry?.id || Array.isArray(entry.stills)) continue;
+  try {
+    const { backdrops = [] } = await tmdb(`/movie/${entry.id}/images`, { include_image_language: 'null' });
+    const picks = backdrops
+      .filter((b) => b.aspect_ratio > 1.6 && b.width >= 1280)
+      .sort((a, b) => (b.vote_count - a.vote_count) || (b.vote_average - a.vote_average))
+      .slice(1, STILL_COUNT + 1); // skip the top one, which is usually the hero backdrop
+    const stills = [];
+    for (let i = 0; i < picks.length; i++) {
+      const file = await saveImage(picks[i].file_path, 'w1280', `${key}-still-${i + 1}.webp`, 1400);
+      if (file) stills.push(file);
+    }
+    entry.stills = stills;
+    stillsAdded++;
+    console.log(`[tmdb] ${r.title}: ${stills.length} stills saved.`);
+  } catch (err) {
+    console.warn(`[tmdb] ${r.title} stills: ${err.message}`);
+  }
+}
+
+if (added || stillsAdded) writeFileSync(CACHE_FILE, JSON.stringify(cache, null, 2) + '\n');
 console.log(`[tmdb] Done. ${added} new film${added === 1 ? '' : 's'} cached.`);

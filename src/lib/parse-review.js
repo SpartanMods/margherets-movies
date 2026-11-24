@@ -12,6 +12,7 @@ import { Marked } from 'marked';
 
 export const SCORECARD_TOKEN = '<!--MM:SCORECARD-->';
 export const PULLQUOTE_TOKEN = '<!--MM:PULLQUOTE-->';
+export const STILL_TOKEN = '<!--MM:STILL-->';
 
 export function slugify(text) {
   return String(text)
@@ -335,14 +336,29 @@ export function parseReview(source, { fileName = '' } = {}) {
 
   let html = htmlParts.join('\n');
 
-  // Drop a pull quote token before the h2 roughly 40% of the way in (spoiler-free part only).
-  if (pack.pullQuote) {
+  // Break points between sections, in the spoiler-free part only and never right before
+  // the scorecard: a pull quote ~40% of the way in, and film stills before every other
+  // remaining section. Inserted from the end so earlier offsets stay valid.
+  {
     const firstCurtain = html.indexOf('<section class="curtain"');
     const safe = firstCurtain === -1 ? html : html.slice(0, firstCurtain);
     const h2s = [...safe.matchAll(/<h2 id=/g)].map((m) => m.index);
-    if (h2s.length >= 3) {
-      const at = h2s[Math.ceil(h2s.length * 0.4)];
-      html = html.slice(0, at) + PULLQUOTE_TOKEN + '\n' + html.slice(at);
+    const scoreAt = safe.indexOf(SCORECARD_TOKEN);
+    const scoreH2 = scoreAt === -1 ? -1 : h2s.filter((i) => i < scoreAt).pop() ?? -1;
+    const inserts = [];
+    let quoteIdx = -1;
+    if (pack.pullQuote && h2s.length >= 3) {
+      quoteIdx = Math.ceil(h2s.length * 0.4);
+      inserts.push({ at: h2s[quoteIdx], token: PULLQUOTE_TOKEN });
+    }
+    let toggle = false;
+    for (let k = 1; k < h2s.length; k++) {
+      if (k === quoteIdx || k - 1 === quoteIdx || h2s[k] === scoreH2) { toggle = false; continue; }
+      toggle = !toggle;
+      if (toggle) inserts.push({ at: h2s[k], token: STILL_TOKEN });
+    }
+    for (const { at, token } of inserts.sort((a, b) => b.at - a.at)) {
+      html = html.slice(0, at) + token + '\n' + html.slice(at);
     }
   }
 

@@ -4,10 +4,6 @@ Score: 97/100
 
 Directed and written by Takashi Yamazaki. Starring Ryunosuke Kamiki, Minami Hamabe, Munetaka Aoki, Hidetaka Yoshioka and Yuki Yamada. Score by Naoki Satō. 125 minutes. Toho.
 
-## A quick disclaimer before we start
-
-I'm a Godzilla fan. I'm saying that up front because a 97 is higher than most people will give this film, and you deserve to know where I'm coming from. I'm not handing out points for nostalgia. Each point has a reason behind it, and if you disagree with the score, I'd at least like you to disagree with the argument.
-
 ## The short version
 
 Godzilla Minus One kicks the modern blockbuster on its ass. Toho made it for under $15 million, which wouldn't cover the catering on some Hollywood monster movies, and it still walked away with the Oscar for Best Visual Effects. Honestly, it disgraced big Hollywood. But the budget isn't what got me. What got me is that the film actually gives a damn about the people running from the monster.
