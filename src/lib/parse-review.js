@@ -123,7 +123,7 @@ function parseCredits(text) {
   const end = String.raw`(?=\.\s|\.$|;|$)`;
   const grab = (re) => flat.match(re)?.[1]?.trim() ?? null;
 
-  const director = grab(new RegExp(String.raw`Direct(?:ed by|or|ors)\s*:?\s*(.+?)` + end, 'i'));
+  const director = grab(new RegExp(String.raw`Direct(?:ed(?: and written)? by|or|ors)\s*:?\s*(.+?)` + end, 'i'));
   const writing = grab(new RegExp(String.raw`(?:Screenplay|Written|Writers?|Writing)\s*(?:by)?\s*:?\s*(.+?)` + end, 'i'));
   const cast = grab(new RegExp(String.raw`(?:Starring|Cast|Stars)\s*:?\s*(.+?)` + end, 'i'));
   const hm = flat.match(/\b(\d)\s*h(?:rs?|ours?)?\s*(\d{1,2})\s*m(?:in(?:utes?)?)?\b/i);
@@ -180,6 +180,34 @@ function parseScoreTable(lines) {
   return null;
 }
 
+// Score as a list: "- Story and writing: 20/20" lines, with an optional "Total: 97/100" line.
+const SCORE_ITEM_RE = /^\s*[-*+]\s+\**([A-Za-z][A-Za-z &/']{1,40}?)\**\s*:\s*\**(\d+(?:\.\d+)?)\s*\/\s*(\d+)\**\s*$/;
+const SCORE_TOTAL_RE = /^\s*(?:[-*+]\s+)?\**(total|overall|final score|final)\**\s*:\s*\**(\d+(?:\.\d+)?)\s*\/\s*(\d+)\**\s*$/i;
+
+function parseScoreList(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    if (!SCORE_ITEM_RE.test(lines[i])) continue;
+    let j = i;
+    const categories = [];
+    let total = null;
+    let max = 100;
+    while (j < lines.length && (SCORE_ITEM_RE.test(lines[j]) || SCORE_TOTAL_RE.test(lines[j]) || !lines[j].trim())) {
+      const t = lines[j].match(SCORE_TOTAL_RE);
+      const m = lines[j].match(SCORE_ITEM_RE);
+      if (t) { total = Number(t[2]); max = Number(t[3]); }
+      else if (m) categories.push({ name: m[1].trim(), score: Number(m[2]), max: Number(m[3]), pct: Number(m[2]) / Number(m[3]) });
+      j++;
+    }
+    while (j > i && !lines[j - 1].trim()) j--;
+    if (categories.length >= 2) {
+      if (total == null) total = categories.reduce((a, c) => a + c.score, 0);
+      return { categories, total, max, start: i, end: j };
+    }
+    i = j;
+  }
+  return null;
+}
+
 // ---------- Spoilers ----------
 
 function spoilerMarker(line) {
@@ -202,19 +230,42 @@ export function parseReview(source, { fileName = '' } = {}) {
 
   const packIndex = lines.findIndex((l) => /^#{1,6}\s*publish(ing)? pack\b/i.test(l.trim()));
   const pack = packIndex >= 0 ? parsePublishPack(lines.slice(packIndex + 1).join('\n')) : parsePublishPack('');
-  const credits = parseCredits(pack.creditsText);
 
   let body = lines.slice(h1Index + 1, packIndex >= 0 ? packIndex : lines.length);
 
-  // Scorecard: pull the table out and leave a token where it sat.
-  const scoreTable = parseScoreTable(body);
+  // Header block (before the first ## section): a bare "Score: 97/100" line is shown by the
+  // marquee instead, and a credits line ("Directed by ... Starring ...") fills the ticket
+  // when there's no Publish pack credits.
+  const firstH2 = body.findIndex((l) => /^##\s/.test(l));
+  const headerEnd = firstH2 === -1 ? 0 : firstH2;
+  let headerTotal = null;
+  for (let i = 0; i < headerEnd; i++) {
+    const l = stripMarkdown(body[i]);
+    const s = l.match(/^(?:my )?score\s*:\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+)\.?$/i);
+    if (s) { headerTotal = { total: Number(s[1]), max: Number(s[2]) }; body[i] = ''; continue; }
+    if (!pack.creditsText && /^(Directed|Written|Starring|Screenplay)\b/i.test(l)) { pack.creditsText = l; body[i] = ''; }
+  }
+  const credits = parseCredits(pack.creditsText);
+
+  // Spoilers marked only by a "## Spoiler..." heading: curtain everything under it until the next ## heading.
+  if (!body.some((l) => spoilerMarker(l))) {
+    const sp = body.findIndex((l) => /^##\s.*spoiler/i.test(l));
+    if (sp !== -1) {
+      let next = body.findIndex((l, k) => k > sp && /^##\s/.test(l));
+      if (next === -1) next = body.length;
+      body = [...body.slice(0, sp + 1), '[SPOILERS START]', ...body.slice(sp + 1, next), '[SPOILERS END]', ...body.slice(next)];
+    }
+  }
+
+  // Scorecard: pull the table (or score list) out and leave a token where it sat.
+  const scoreTable = parseScoreTable(body) ?? parseScoreList(body);
   if (scoreTable) {
     body = [...body.slice(0, scoreTable.start), '', SCORECARD_TOKEN, '', ...body.slice(scoreTable.end)];
   }
 
   // Total score fallback from prose ("My score: 88 out of 100", "The score: 88/100").
-  let total = scoreTable?.total ?? null;
-  let max = scoreTable?.max ?? 100;
+  let total = scoreTable?.total ?? headerTotal?.total ?? null;
+  let max = scoreTable?.max ?? headerTotal?.max ?? 100;
   if (total == null) {
     const m = text.match(/score[^0-9\n]{0,20}(\d{1,3})\s*(?:\/|out of)\s*(\d{2,3})/i);
     if (m) { total = Number(m[1]); max = Number(m[2]); }
