@@ -12,6 +12,7 @@ import { Marked } from 'marked';
 
 export const SCORECARD_TOKEN = '<!--MM:SCORECARD-->';
 export const PULLQUOTE_TOKEN = '<!--MM:PULLQUOTE-->';
+export const STILL_TOKEN = '<!--MM:STILL-->';
 
 export function slugify(text) {
   return String(text)
@@ -123,7 +124,7 @@ function parseCredits(text) {
   const end = String.raw`(?=\.\s|\.$|;|$)`;
   const grab = (re) => flat.match(re)?.[1]?.trim() ?? null;
 
-  const director = grab(new RegExp(String.raw`Direct(?:ed by|or|ors)\s*:?\s*(.+?)` + end, 'i'));
+  const director = grab(new RegExp(String.raw`Direct(?:ed(?: and written)? by|or|ors)\s*:?\s*(.+?)` + end, 'i'));
   const writing = grab(new RegExp(String.raw`(?:Screenplay|Written|Writers?|Writing)\s*(?:by)?\s*:?\s*(.+?)` + end, 'i'));
   const cast = grab(new RegExp(String.raw`(?:Starring|Cast|Stars)\s*:?\s*(.+?)` + end, 'i'));
   const hm = flat.match(/\b(\d)\s*h(?:rs?|ours?)?\s*(\d{1,2})\s*m(?:in(?:utes?)?)?\b/i);
@@ -180,6 +181,34 @@ function parseScoreTable(lines) {
   return null;
 }
 
+// Score as a list: "- Story and writing: 20/20" lines, with an optional "Total: 97/100" line.
+const SCORE_ITEM_RE = /^\s*[-*+]\s+\**([A-Za-z][A-Za-z &/']{1,40}?)\**\s*:\s*\**(\d+(?:\.\d+)?)\s*\/\s*(\d+)\**\s*$/;
+const SCORE_TOTAL_RE = /^\s*(?:[-*+]\s+)?\**(total|overall|final score|final)\**\s*:\s*\**(\d+(?:\.\d+)?)\s*\/\s*(\d+)\**\s*$/i;
+
+function parseScoreList(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    if (!SCORE_ITEM_RE.test(lines[i])) continue;
+    let j = i;
+    const categories = [];
+    let total = null;
+    let max = 100;
+    while (j < lines.length && (SCORE_ITEM_RE.test(lines[j]) || SCORE_TOTAL_RE.test(lines[j]) || !lines[j].trim())) {
+      const t = lines[j].match(SCORE_TOTAL_RE);
+      const m = lines[j].match(SCORE_ITEM_RE);
+      if (t) { total = Number(t[2]); max = Number(t[3]); }
+      else if (m) categories.push({ name: m[1].trim(), score: Number(m[2]), max: Number(m[3]), pct: Number(m[2]) / Number(m[3]) });
+      j++;
+    }
+    while (j > i && !lines[j - 1].trim()) j--;
+    if (categories.length >= 2) {
+      if (total == null) total = categories.reduce((a, c) => a + c.score, 0);
+      return { categories, total, max, start: i, end: j };
+    }
+    i = j;
+  }
+  return null;
+}
+
 // ---------- Spoilers ----------
 
 function spoilerMarker(line) {
@@ -202,19 +231,42 @@ export function parseReview(source, { fileName = '' } = {}) {
 
   const packIndex = lines.findIndex((l) => /^#{1,6}\s*publish(ing)? pack\b/i.test(l.trim()));
   const pack = packIndex >= 0 ? parsePublishPack(lines.slice(packIndex + 1).join('\n')) : parsePublishPack('');
-  const credits = parseCredits(pack.creditsText);
 
   let body = lines.slice(h1Index + 1, packIndex >= 0 ? packIndex : lines.length);
 
-  // Scorecard: pull the table out and leave a token where it sat.
-  const scoreTable = parseScoreTable(body);
+  // Header block (before the first ## section): a bare "Score: 97/100" line is shown by the
+  // marquee instead, and a credits line ("Directed by ... Starring ...") fills the ticket
+  // when there's no Publish pack credits.
+  const firstH2 = body.findIndex((l) => /^##\s/.test(l));
+  const headerEnd = firstH2 === -1 ? 0 : firstH2;
+  let headerTotal = null;
+  for (let i = 0; i < headerEnd; i++) {
+    const l = stripMarkdown(body[i]);
+    const s = l.match(/^(?:my )?score\s*:\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+)\.?$/i);
+    if (s) { headerTotal = { total: Number(s[1]), max: Number(s[2]) }; body[i] = ''; continue; }
+    if (!pack.creditsText && /^(Directed|Written|Starring|Screenplay)\b/i.test(l)) { pack.creditsText = l; body[i] = ''; }
+  }
+  const credits = parseCredits(pack.creditsText);
+
+  // Spoilers marked only by a "## Spoiler..." heading: curtain everything under it until the next ## heading.
+  if (!body.some((l) => spoilerMarker(l))) {
+    const sp = body.findIndex((l) => /^##\s.*spoiler/i.test(l));
+    if (sp !== -1) {
+      let next = body.findIndex((l, k) => k > sp && /^##\s/.test(l));
+      if (next === -1) next = body.length;
+      body = [...body.slice(0, sp + 1), '[SPOILERS START]', ...body.slice(sp + 1, next), '[SPOILERS END]', ...body.slice(next)];
+    }
+  }
+
+  // Scorecard: pull the table (or score list) out and leave a token where it sat.
+  const scoreTable = parseScoreTable(body) ?? parseScoreList(body);
   if (scoreTable) {
     body = [...body.slice(0, scoreTable.start), '', SCORECARD_TOKEN, '', ...body.slice(scoreTable.end)];
   }
 
   // Total score fallback from prose ("My score: 88 out of 100", "The score: 88/100").
-  let total = scoreTable?.total ?? null;
-  let max = scoreTable?.max ?? 100;
+  let total = scoreTable?.total ?? headerTotal?.total ?? null;
+  let max = scoreTable?.max ?? headerTotal?.max ?? 100;
   if (total == null) {
     const m = text.match(/score[^0-9\n]{0,20}(\d{1,3})\s*(?:\/|out of)\s*(\d{2,3})/i);
     if (m) { total = Number(m[1]); max = Number(m[2]); }
@@ -261,10 +313,18 @@ export function parseReview(source, { fileName = '' } = {}) {
   const htmlParts = segments
     .filter((s) => s.md.trim())
     .map((s) => {
-      const html = marked.parse(s.md);
+      let html = marked.parse(s.md);
       if (!s.spoiler) return html;
       spoilerCount++;
       const id = `spoilers-${spoilerCount}`;
+      // One still inside the first curtain, about halfway through the spoiler text.
+      if (spoilerCount === 1) {
+        const ends = [...html.matchAll(/<\/p>/g)].map((m) => m.index + 4);
+        if (ends.length >= 2) {
+          const at = ends[Math.ceil(ends.length / 2) - 1];
+          html = html.slice(0, at) + '\n' + STILL_TOKEN + '\n' + html.slice(at);
+        }
+      }
       return `
 <section class="curtain" data-curtain>
   <button type="button" class="curtain__drape" aria-expanded="false" aria-controls="${id}">
@@ -284,14 +344,30 @@ export function parseReview(source, { fileName = '' } = {}) {
 
   let html = htmlParts.join('\n');
 
-  // Drop a pull quote token before the h2 roughly 40% of the way in (spoiler-free part only).
-  if (pack.pullQuote) {
+  // Break points between sections, in the spoiler-free part only and never right before
+  // the scorecard: a pull quote ~40% of the way in, and film stills before every other
+  // remaining section. Inserted from the end so earlier offsets stay valid.
+  {
     const firstCurtain = html.indexOf('<section class="curtain"');
     const safe = firstCurtain === -1 ? html : html.slice(0, firstCurtain);
     const h2s = [...safe.matchAll(/<h2 id=/g)].map((m) => m.index);
-    if (h2s.length >= 3) {
-      const at = h2s[Math.ceil(h2s.length * 0.4)];
-      html = html.slice(0, at) + PULLQUOTE_TOKEN + '\n' + html.slice(at);
+    const scoreAt = safe.indexOf(SCORECARD_TOKEN);
+    const scoreH2 = scoreAt === -1 ? -1 : h2s.filter((i) => i < scoreAt).pop() ?? -1;
+    const inserts = [];
+    let quoteIdx = -1;
+    if (pack.pullQuote && h2s.length >= 3) {
+      quoteIdx = Math.ceil(h2s.length * 0.4);
+      inserts.push({ at: h2s[quoteIdx], token: PULLQUOTE_TOKEN });
+    }
+    let toggle = false;
+    for (let k = 1; k < h2s.length; k++) {
+      const leadsIntoCurtain = firstCurtain !== -1 && k === h2s.length - 1;
+      if (k === quoteIdx || k - 1 === quoteIdx || h2s[k] === scoreH2 || leadsIntoCurtain) { toggle = false; continue; }
+      toggle = !toggle;
+      if (toggle) inserts.push({ at: h2s[k], token: STILL_TOKEN });
+    }
+    for (const { at, token } of inserts.sort((a, b) => b.at - a.at)) {
+      html = html.slice(0, at) + token + '\n' + html.slice(at);
     }
   }
 

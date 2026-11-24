@@ -73,6 +73,7 @@ export function loadReviews() {
       runtime: review.credits.runtime ?? tmdb?.runtime ?? null,
       poster: tmdb?.poster ?? null,
       backdrop: tmdb?.backdrop ?? null,
+      stills: tmdb?.stills ?? [],
       tmdbId: tmdb?.id ?? null,
     };
   });
