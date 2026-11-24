@@ -313,10 +313,18 @@ export function parseReview(source, { fileName = '' } = {}) {
   const htmlParts = segments
     .filter((s) => s.md.trim())
     .map((s) => {
-      const html = marked.parse(s.md);
+      let html = marked.parse(s.md);
       if (!s.spoiler) return html;
       spoilerCount++;
       const id = `spoilers-${spoilerCount}`;
+      // One still inside the first curtain, about halfway through the spoiler text.
+      if (spoilerCount === 1) {
+        const ends = [...html.matchAll(/<\/p>/g)].map((m) => m.index + 4);
+        if (ends.length >= 2) {
+          const at = ends[Math.ceil(ends.length / 2) - 1];
+          html = html.slice(0, at) + '\n' + STILL_TOKEN + '\n' + html.slice(at);
+        }
+      }
       return `
 <section class="curtain" data-curtain>
   <button type="button" class="curtain__drape" aria-expanded="false" aria-controls="${id}">
@@ -353,7 +361,8 @@ export function parseReview(source, { fileName = '' } = {}) {
     }
     let toggle = false;
     for (let k = 1; k < h2s.length; k++) {
-      if (k === quoteIdx || k - 1 === quoteIdx || h2s[k] === scoreH2) { toggle = false; continue; }
+      const leadsIntoCurtain = firstCurtain !== -1 && k === h2s.length - 1;
+      if (k === quoteIdx || k - 1 === quoteIdx || h2s[k] === scoreH2 || leadsIntoCurtain) { toggle = false; continue; }
       toggle = !toggle;
       if (toggle) inserts.push({ at: h2s[k], token: STILL_TOKEN });
     }
