@@ -2,7 +2,7 @@
 
 A movie palace for long-form reviews. Dark cinematic theme with marquee lights, velvet-curtain spoilers, a scorecard for every film, a Hall of Fame and search.
 
-Live site (once GitHub Pages is on): https://spartanmods.github.io/margherets-movies
+Live site: https://www.johnathanmargheret.com/margherets-movies
 
 ## Posting a review
 
